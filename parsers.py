@@ -10,8 +10,8 @@ import requests
 
 KASPI_CITY = "710000000"
 
-WB_DEST = "-1257786"
-WB_CURRENCY = "rub"
+WB_DEST = "85"
+WB_CURRENCY = "kzt"
 
 MAX_ITEMS = 48
 PAGE_SIZE = 12
@@ -124,15 +124,18 @@ def kaspi(query, limit, session):
 
 @marketplace("Wildberries", currency="₽" if WB_CURRENCY == "rub" else "₸", color="#cb11ab")
 def wildberries(query, limit, session):
-    for url in ("https://search.wb.ru/exactmatch/ru/common/v18/search",
-                "https://u-search.wb.ru/exactmatch/ru/common/v18/search"):
-        data = get_json(
-            session, url,
-            params={"appType": "1", "curr": WB_CURRENCY, "dest": WB_DEST, "lang": "ru",
-                    "page": "1", "query": query, "resultset": "catalog",
-                    "sort": "popular", "spp": "30", "suppressSpellcheck": "false"},
-            headers={"Accept": "*/*", "Referer": "https://www.wildberries.ru/"},
-        )
+    endpoints = (
+        "https://search.wb.ru/exactmatch/sng/common/v18/search",
+        "https://u-search.wb.ru/exactmatch/sng/common/v18/search",
+        "https://www.wildberries.ru/__internal/u-search/exactmatch/sng/common/v18/search",
+    )
+    params = {"appType": "1", "curr": WB_CURRENCY, "dest": WB_DEST,
+              "lang": "ru", "locale": "kz", "page": "1", "query": query,
+              "resultset": "catalog", "sort": "popular", "spp": "30",
+              "suppressSpellcheck": "false"}
+    headers = {"Accept": "*/*", "Referer": "https://www.wildberries.ru/"}
+    for url in endpoints:
+        data = get_json(session, url, params=params, headers=headers)
         products = (data or {}).get("products") or ((data or {}).get("data") or {}).get("products") or []
         if products:
             break
@@ -188,7 +191,7 @@ def _fetch_all(query):
     session.headers.update({"User-Agent": USER_AGENT,
                             "Accept-Language": "ru-RU,ru;q=0.9,kk;q=0.8"})
 
-    results, colors, everything = {}, {}, []
+    results, colors = {}, {}
     for mp in REGISTRY:
         try:
             raw = mp["fn"](query, MAX_ITEMS, session)
@@ -197,10 +200,9 @@ def _fetch_all(query):
         formatted = _format(raw, mp["name"], mp["currency"])
         results[mp["name"]] = formatted
         colors[mp["name"]] = mp["color"]
-        everything.extend(formatted)
         time.sleep(REQUEST_DELAY)
 
-    full = {"results": results, "colors": colors, "best": _best(everything)}
+    full = {"results": results, "colors": colors}
     with _lock:
         _cache[key] = (now, full)
     return full
@@ -209,7 +211,7 @@ def _fetch_all(query):
 def search_all(query, page=1):
     query = (query or "").strip()
     if not query:
-        return {"query": "", "results": {}, "colors": {}, "best": None,
+        return {"query": "", "results": {}, "colors": {},
                 "page": 1, "total_pages": 1, "totals": {}, "cached": False}
 
     with _lock:
@@ -230,18 +232,12 @@ def search_all(query, page=1):
         "query": query,
         "results": results_page,
         "colors": full["colors"],
-        "best": full["best"],
         "page": page,
         "total_pages": max(1, -(-max_count // PAGE_SIZE)),
         "totals": totals,
         "page_size": PAGE_SIZE,
         "cached": cached,
     }
-
-
-def _best(products):
-    rated = [p for p in products if p.get("rating") is not None] or products
-    return max(rated, key=lambda p: ((p.get("rating") or 0.0), p.get("reviews") or 0)) if rated else None
 
 
 if __name__ == "__main__":
@@ -253,5 +249,3 @@ if __name__ == "__main__":
         for it in items:
             price = f"{it['price_text']} {it['currency']}" if it["price_text"] else "—"
             print(f"  {it['name'][:55]:55} | {price:>14} | r={it['rating']} | отз={it['reviews']}")
-    b = data["best"]
-    print("\nЛучший:", f"{b['name']} ({b['marketplace']})" if b else "не найдено")

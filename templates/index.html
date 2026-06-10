@@ -99,7 +99,6 @@
     </div>
 
     <div class="status" id="status"></div>
-    <div id="best"></div>
     <div id="results"></div>
     <div class="pager" id="pager"></div>
   </div>
@@ -108,7 +107,6 @@
     const qInput=document.getElementById('q');
     const goBtn=document.getElementById('go');
     const statusEl=document.getElementById('status');
-    const bestBox=document.getElementById('best');
     const resultsEl=document.getElementById('results');
     const pagerEl=document.getElementById('pager');
 
@@ -151,7 +149,7 @@
       if(!q) return;
       currentQuery=q;
       goBtn.disabled=true; statusEl.textContent='Ищу…';
-      if(page===1){ bestBox.innerHTML=''; resultsEl.innerHTML=''; pagerEl.innerHTML=''; }
+      if(page===1){ resultsEl.innerHTML=''; pagerEl.innerHTML=''; }
       try{
         const res=await fetch(`/api/search?q=${encodeURIComponent(q)}&page=${page}`);
         let data;
@@ -160,11 +158,6 @@
         if(data.error){ statusEl.textContent=data.error; return; }
 
         statusEl.textContent=`Страница ${data.page} из ${data.total_pages}` + (data.cached?' · из кэша':'');
-
-        if(data.best){
-          const b=data.best;
-          bestBox.innerHTML=`<div class="best"><div class="tag">★ Лучший по рейтингу — ${esc(b.marketplace)}</div>${card(b)}</div>`;
-        }
 
         let cols='';
         for(const mp of Object.keys(data.results)){
@@ -184,4 +177,4 @@
     qInput.addEventListener('keydown',e=>{if(e.key==='Enter')run(qInput.value,1);});
   </script>
 </body>
-</html> 
+</html>
