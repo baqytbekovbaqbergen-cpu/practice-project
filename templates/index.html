@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Поиск по маркетплейсам</title>
+  <style>
+    :root{
+      --bg:#f4f5f9;
+      --panel:#ffffff;
+      --text:#16181d;
+      --muted:#7a828f;
+      --border:#eceef2;
+      --accent:#6c5ce7;
+      --accent2:#8b7cf6;
+      --kaspi:#f14635;
+      --wb:#cb11ab;
+      --gold:#f59e0b;
+      --shadow:0 1px 2px rgba(20,24,40,.04),0 8px 24px rgba(20,24,40,.06);
+      --shadow-sm:0 1px 2px rgba(20,24,40,.05);
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--text);
+      font-family:-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+      padding:32px 20px;-webkit-font-smoothing:antialiased}
+    .wrap{max-width:1040px;margin:0 auto}
+
+    .hero{text-align:center;margin-bottom:26px}
+    h1{font-size:30px;font-weight:800;margin:0 0 8px;letter-spacing:-.02em;
+      background:linear-gradient(90deg,var(--accent),var(--wb));
+      -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+    .sub{color:var(--muted);font-size:15px;margin:0}
+
+    .bar{display:flex;gap:10px;margin:22px auto 26px;max-width:640px}
+    input{flex:1;padding:15px 18px;border-radius:14px;border:1px solid var(--border);
+      background:var(--panel);color:var(--text);font-size:15px;outline:none;
+      box-shadow:var(--shadow-sm);transition:border-color .15s,box-shadow .15s}
+    input::placeholder{color:#a8aebb}
+    input:focus{border-color:var(--accent2);box-shadow:0 0 0 4px rgba(108,92,231,.12)}
+    button.go{padding:15px 26px;border-radius:14px;border:none;cursor:pointer;
+      color:#fff;font-size:15px;font-weight:700;
+      background:linear-gradient(135deg,var(--accent),var(--accent2));
+      box-shadow:0 6px 16px rgba(108,92,231,.30);transition:transform .12s,box-shadow .12s}
+    button.go:hover{transform:translateY(-1px);box-shadow:0 8px 20px rgba(108,92,231,.38)}
+    button.go:disabled{opacity:.55;cursor:default;transform:none}
+
+    .status{color:var(--muted);font-size:14px;margin-bottom:18px;min-height:18px;text-align:center}
+
+    .best{border-radius:16px;padding:18px;margin-bottom:26px;border:1px solid #f3e6c4;
+      background:linear-gradient(180deg,#fffaf0,#ffffff);box-shadow:var(--shadow)}
+    .best .tag{color:#b07d12;font-size:12px;font-weight:800;text-transform:uppercase;
+      letter-spacing:.6px;margin-bottom:10px}
+
+    .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px}
+    @media (max-width:680px){ .cols{grid-template-columns:1fr} }
+
+    .group{background:var(--panel);border:1px solid var(--border);border-radius:16px;
+      padding:16px;box-shadow:var(--shadow)}
+    .group h2{font-size:15px;margin:0 0 14px;display:flex;align-items:center;gap:9px;font-weight:700}
+    .dot{width:11px;height:11px;border-radius:50%;display:inline-block;background:var(--accent)}
+    .count{color:var(--muted);font-weight:500;font-size:13px;margin-left:auto}
+
+    .card{border:1px solid var(--border);border-radius:12px;padding:10px 12px;
+      margin-bottom:10px;background:var(--panel);display:flex;gap:11px;align-items:center;
+      transition:box-shadow .15s,transform .12s,border-color .15s}
+    .card:last-child{margin-bottom:0}
+    .card:hover{box-shadow:var(--shadow);transform:translateY(-1px);border-color:#e3e6ee}
+    .card .thumb{width:54px;height:54px;border-radius:10px;object-fit:contain;
+      background:#f7f8fa;flex-shrink:0;border:1px solid var(--border)}
+    .card .info{min-width:0}
+    .card a{color:var(--text);text-decoration:none;font-size:14px;line-height:1.35;font-weight:500;
+      overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+    .card a:hover{color:var(--accent)}
+    .meta{display:flex;gap:11px;margin-top:6px;font-size:13px;color:var(--muted);flex-wrap:wrap;align-items:center}
+    .price{color:#16181d;font-weight:700}
+    .star{color:var(--gold);font-weight:600}
+    .empty{color:var(--muted);font-size:13px;font-style:italic;padding:8px 2px}
+
+    .pager{display:flex;justify-content:center;align-items:center;gap:6px;margin:28px 0 8px;flex-wrap:wrap}
+    .pager button{padding:9px 13px;font-size:14px;background:var(--panel);color:var(--text);
+      border:1px solid var(--border);border-radius:10px;font-weight:600;min-width:40px;cursor:pointer;
+      box-shadow:var(--shadow-sm);transition:background .12s,color .12s,transform .1s}
+    .pager button:hover:not(:disabled){transform:translateY(-1px)}
+    .pager button.active{background:linear-gradient(135deg,var(--accent),var(--accent2));
+      border-color:transparent;color:#fff;box-shadow:0 4px 12px rgba(108,92,231,.30)}
+    .pager button:disabled{opacity:.4;cursor:default}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hero">
+      <h1>Поиск по маркетплейсам</h1>
+      <p class="sub">Ищите товары Wildberries и Kaspi в один клик</p>
+    </div>
+
+    <div class="bar">
+      <input id="q" type="text" placeholder="например: холодильник indesit" autofocus>
+      <button class="go" id="go">Найти</button>
+    </div>
+
+    <div class="status" id="status"></div>
+    <div id="best"></div>
+    <div id="results"></div>
+    <div class="pager" id="pager"></div>
+  </div>
+
+  <script>
+    const qInput=document.getElementById('q');
+    const goBtn=document.getElementById('go');
+    const statusEl=document.getElementById('status');
+    const bestBox=document.getElementById('best');
+    const resultsEl=document.getElementById('results');
+    const pagerEl=document.getElementById('pager');
+
+    let currentQuery='';
+
+    function esc(s){return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+
+    function card(p){
+      const parts=[];
+      if(p.price_text) parts.push(`<span class="price">${p.price_text} ${p.currency||'₸'}</span>`);
+      if(p.rating!=null) parts.push(`<span class="star">★ ${p.rating.toFixed(1)}</span>`);
+      if(p.reviews) parts.push(`${p.reviews} отз.`);
+      const link=p.url?`<a href="${p.url}" target="_blank" rel="noopener">${esc(p.name)}</a>`:esc(p.name);
+      const img=p.image?`<img class="thumb" src="${esc(p.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none'">`:'';
+      return `<div class="card">${img}<div class="info">${link}<div class="meta">${parts.join('<span>·</span>')}</div></div></div>`;
+    }
+
+    function column(mp,items,total,color){
+      const dot=`<span class="dot" style="background:${esc(color||'')}"></span>`;
+      let html=`<div class="group"><h2>${dot}${esc(mp)}<span class="count">${total} шт.</span></h2>`;
+      html+= items.length ? items.map(card).join('') : `<div class="empty">Пусто или заблокировано защитой сайта</div>`;
+      return html+`</div>`;
+    }
+
+    function renderPager(page,totalPages){
+      if(totalPages<=1){ pagerEl.innerHTML=''; return; }
+      let html=`<button ${page<=1?'disabled':''} data-p="${page-1}">←</button>`;
+      for(let i=1;i<=totalPages;i++){
+        html+=`<button class="${i===page?'active':''}" data-p="${i}">${i}</button>`;
+      }
+      html+=`<button ${page>=totalPages?'disabled':''} data-p="${page+1}">→</button>`;
+      pagerEl.innerHTML=html;
+      pagerEl.querySelectorAll('button[data-p]').forEach(b=>{
+        b.addEventListener('click',()=>{ if(!b.disabled) run(currentQuery, parseInt(b.dataset.p)); });
+      });
+    }
+
+    async function run(q, page=1){
+      q=(q||'').trim();
+      if(!q) return;
+      currentQuery=q;
+      goBtn.disabled=true; statusEl.textContent='Ищу…';
+      if(page===1){ bestBox.innerHTML=''; resultsEl.innerHTML=''; pagerEl.innerHTML=''; }
+      try{
+        const res=await fetch(`/api/search?q=${encodeURIComponent(q)}&page=${page}`);
+        let data;
+        try{ data=await res.json(); }
+        catch(_){ statusEl.textContent='Сервер вернул не JSON (код '+res.status+'). Запущен ли app.py?'; return; }
+        if(data.error){ statusEl.textContent=data.error; return; }
+
+        statusEl.textContent=`Страница ${data.page} из ${data.total_pages}` + (data.cached?' · из кэша':'');
+
+        if(data.best){
+          const b=data.best;
+          bestBox.innerHTML=`<div class="best"><div class="tag">★ Лучший по рейтингу — ${esc(b.marketplace)}</div>${card(b)}</div>`;
+        }
+
+        let cols='';
+        for(const mp of Object.keys(data.results)){
+          cols+=column(mp, data.results[mp], (data.totals&&data.totals[mp])||0, (data.colors&&data.colors[mp]));
+        }
+        resultsEl.innerHTML=`<div class="cols">${cols}</div>`;
+        renderPager(data.page, data.total_pages);
+        window.scrollTo({top:0,behavior:'smooth'});
+      }catch(e){
+        statusEl.textContent='Сетевая ошибка: '+e.message;
+      }finally{
+        goBtn.disabled=false;
+      }
+    }
+
+    goBtn.addEventListener('click',()=>run(qInput.value,1));
+    qInput.addEventListener('keydown',e=>{if(e.key==='Enter')run(qInput.value,1);});
+  </script>
+</body>
+</html> 
