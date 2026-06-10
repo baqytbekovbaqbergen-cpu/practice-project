@@ -11,7 +11,7 @@ import requests
 KASPI_CITY = "710000000"
 
 WB_DEST = "-1257786"
-WB_CURRENCY = "kzt"
+WB_CURRENCY = "rub"
 
 MAX_ITEMS = 48
 PAGE_SIZE = 12
