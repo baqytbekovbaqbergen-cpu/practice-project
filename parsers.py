@@ -11,7 +11,8 @@ import requests
 KASPI_CITY = "710000000"
 
 WB_DEST = "85"
-WB_CURRENCY = "kzt"
+WB_STRATEGY = "browser"
+WB_HEADLESS = True
 
 MAX_ITEMS = 48
 PAGE_SIZE = 12
@@ -36,10 +37,10 @@ def get_json(session, url, params=None, headers=None):
         return None
 
 
-def item(name, *, price=None, rating=None, reviews=0, url="", image=None):
+def item(name, *, price=None, rating=None, reviews=0, url="", image=None, currency=None):
     return {"name": (name or "").strip(), "price": to_int(price),
             "rating": to_float(rating), "reviews": int(reviews or 0),
-            "url": url or "", "image": image}
+            "url": url or "", "image": image, "currency": currency}
 
 
 def to_int(value):
@@ -122,26 +123,105 @@ def kaspi(query, limit, session):
     return out[:limit]
 
 
-@marketplace("Wildberries", currency="₽" if WB_CURRENCY == "rub" else "₸", color="#cb11ab")
-def wildberries(query, limit, session):
-    endpoints = (
-        "https://search.wb.ru/exactmatch/sng/common/v18/search",
-        "https://u-search.wb.ru/exactmatch/sng/common/v18/search",
-        "https://www.wildberries.ru/__internal/u-search/exactmatch/sng/common/v18/search",
-    )
-    params = {"appType": "1", "curr": WB_CURRENCY, "dest": WB_DEST,
-              "lang": "ru", "locale": "kz", "page": "1", "query": query,
-              "resultset": "catalog", "sort": "popular", "spp": "30",
-              "suppressSpellcheck": "false"}
-    headers = {"Accept": "*/*", "Referer": "https://www.wildberries.ru/"}
-    for url in endpoints:
-        data = get_json(session, url, params=params, headers=headers)
-        products = (data or {}).get("products") or ((data or {}).get("data") or {}).get("products") or []
-        if products:
-            break
-    else:
-        products = []
+def _wb_request(session, url, params, headers, retries, wait):
+    for attempt in range(retries):
+        try:
+            r = session.get(url, params=params, headers=headers, timeout=HTTP_TIMEOUT)
+        except Exception:
+            return None
+        if r.status_code == 429:
+            time.sleep(wait)
+            continue
+        try:
+            return r.json()
+        except Exception:
+            return None
+    return None
 
+
+def _wb_products(data):
+    return (data or {}).get("products") or ((data or {}).get("data") or {}).get("products") or []
+
+
+def _wb_ru(session, query):
+    headers = {"Accept": "*/*", "Referer": "https://www.wildberries.ru/"}
+    params = {"appType": "1", "curr": "rub", "dest": "-1257786", "lang": "ru",
+              "page": "1", "query": query, "resultset": "catalog",
+              "sort": "popular", "spp": "30", "suppressSpellcheck": "false"}
+    for url in ("https://search.wb.ru/exactmatch/ru/common/v18/search",
+                "https://u-search.wb.ru/exactmatch/ru/common/v18/search"):
+        data = _wb_request(session, url, params, headers, retries=3, wait=3)
+        prods = _wb_products(data)
+        if prods:
+            return prods, "₽"
+    return [], "₽"
+
+
+def _wb_kz(session, query, patient=False):
+    hosts = ("https://search.wb.ru/exactmatch/sng/common/v18/search",
+             "https://u-search.wb.ru/exactmatch/sng/common/v18/search")
+    base = {"appType": "1", "dest": WB_DEST, "hide_dtype": "13;15",
+            "lang": "ru", "locale": "kz", "page": "1", "query": query,
+            "resultset": "catalog", "sort": "popular", "spp": "30",
+            "suppressSpellcheck": "false"}
+    headers = {"Accept": "*/*", "Origin": "https://www.wildberries.ru",
+               "Referer": "https://www.wildberries.ru/"}
+    retries, wait, gap = (6, 6, 2.0) if patient else (3, 3, 0.5)
+    for curr, sym in (("kzt", "₸"), ("rub", "₽")):
+        for url in hosts:
+            data = _wb_request(session, url, {**base, "curr": curr}, headers, retries, wait)
+            prods = _wb_products(data)
+            if prods:
+                return prods, sym
+            time.sleep(gap)
+    return [], "₸"
+
+
+def _wb_browser(query):
+    import json as _json
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        return [], "₸"
+    url = ("https://www.wildberries.ru/__internal/u-search/exactmatch/sng/common/v18/search"
+           "?ab_testid=catboost_exp_2&appType=1&curr=kzt"
+           f"&dest={WB_DEST}&hide_dflags=131072&hide_dtype=11;13;15"
+           "&hide_vflags=4294967296&inheritFilters=false&lang=ru&locale=kz&page=1"
+           f"&query={quote_plus(query)}&resultset=catalog&sort=popular&spp=30&suppressSpellcheck=false")
+    data = None
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(
+                headless=WB_HEADLESS,
+                args=["--disable-blink-features=AutomationControlled"])
+            ctx = browser.new_context(locale="ru-RU", user_agent=USER_AGENT)
+            page = ctx.new_page()
+            page.goto("https://www.wildberries.ru/", wait_until="domcontentloaded", timeout=60000)
+            page.wait_for_timeout(7000)
+            for _ in range(3):
+                try:
+                    data = page.evaluate(
+                        "async (u) => { try { const r = await fetch(u, {headers:{'Accept':'*/*'}}); "
+                        "return await r.json(); } catch(e) { return null; } }", url)
+                except Exception:
+                    data = None
+                if _wb_products(data):
+                    break
+                page.wait_for_timeout(4000)
+            if not _wb_products(data):
+                try:
+                    page.goto(url, wait_until="domcontentloaded", timeout=60000)
+                    page.wait_for_timeout(6000)
+                    data = _json.loads(page.evaluate("() => document.body ? document.body.innerText : ''"))
+                except Exception:
+                    pass
+            browser.close()
+    except Exception:
+        return [], "₸"
+    return _wb_products(data), "₸"
+
+
+def _wb_to_items(products, currency, limit):
     out = []
     for it in products[:limit]:
         if not isinstance(it, dict):
@@ -160,8 +240,23 @@ def wildberries(query, limit, session):
                         rating=it.get("reviewRating") or it.get("nmReviewRating"),
                         reviews=it.get("feedbacks"),
                         url=f"https://www.wildberries.ru/catalog/{it.get('id')}/detail.aspx",
-                        image=wb_image(it.get("id"))))
+                        image=wb_image(it.get("id")), currency=currency))
     return out
+
+
+@marketplace("Wildberries", currency="₸", color="#cb11ab")
+def wildberries(query, limit, session):
+    if WB_STRATEGY == "ru":
+        products, currency = _wb_ru(session, query)
+    elif WB_STRATEGY == "browser":
+        products, currency = _wb_browser(query)
+    elif WB_STRATEGY == "hybrid":
+        products, currency = _wb_kz(session, query)
+        if not products:
+            products, currency = _wb_ru(session, query)
+    else:  # "kz" / "kz_patient"
+        products, currency = _wb_kz(session, query, patient=(WB_STRATEGY == "kz_patient"))
+    return _wb_to_items(products, currency, limit)
 
 
 _cache: dict[str, tuple[float, dict]] = {}
@@ -174,7 +269,7 @@ def _format(raw, name, currency):
         price = it.get("price")
         d = dict(it)
         d["marketplace"] = name
-        d["currency"] = currency
+        d["currency"] = it.get("currency") or currency
         d["price_text"] = f"{price:,}".replace(",", " ") if price else None
         res.append(d)
     return res
