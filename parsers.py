@@ -12,7 +12,7 @@ KASPI_CITY = "710000000"
 
 WB_DEST = "85"
 WB_STRATEGY = "browser"
-WB_HEADLESS = True
+WB_HEADLESS = False
 
 MAX_ITEMS = 48
 PAGE_SIZE = 12
@@ -109,12 +109,17 @@ def kaspi(query, limit, session):
         for c in cards:
             if not isinstance(c, dict):
                 continue
+            title = (c.get("title") or "").strip()
             href = c.get("shopLink") or c.get("link") or ""
             if href.startswith("/"):
-                href = f"https://kaspi.kz{href}"
+                href = "https://kaspi.kz/shop" + href
+            if href and "?c=" not in href and "&c=" not in href:
+                href += ("&" if "?" in href else "?") + "c=" + KASPI_CITY
+            if not href:
+                href = "https://kaspi.kz/shop/search/?text=" + quote_plus(title)
             previews = c.get("previewImages") or []
             img = previews[0].get("small") if previews and isinstance(previews[0], dict) else None
-            out.append(item(c.get("title"), price=c.get("unitPrice") or c.get("price"),
+            out.append(item(title, price=c.get("unitPrice") or c.get("price"),
                             rating=c.get("rating"), reviews=c.get("reviewsQuantity"),
                             url=href, image=img))
         if len(out) >= limit:
@@ -140,7 +145,11 @@ def _wb_request(session, url, params, headers, retries, wait):
 
 
 def _wb_products(data):
-    return (data or {}).get("products") or ((data or {}).get("data") or {}).get("products") or []
+    if not isinstance(data, dict):
+        return []
+    top = data.get("products") or []
+    nested = (data.get("data") or {}).get("products") or []
+    return top if len(top) >= len(nested) else nested
 
 
 def _wb_ru(session, query):
@@ -221,11 +230,19 @@ def _wb_browser(query):
     return _wb_products(data), "₸"
 
 
+def _wb_in_stock(it):
+    for s in (it.get("sizes") or []):
+        if isinstance(s, dict) and (s.get("stocks") or []):
+            return True
+    return bool(it.get("totalQuantity"))
+
+
 def _wb_to_items(products, currency, limit):
+    products = [it for it in products if isinstance(it, dict)]
+    available = [it for it in products if _wb_in_stock(it)]
+    source = available if available else products
     out = []
-    for it in products[:limit]:
-        if not isinstance(it, dict):
-            continue
+    for it in source[:limit]:
         price = None
         sizes = it.get("sizes") or []
         if sizes and isinstance(sizes[0], dict):
